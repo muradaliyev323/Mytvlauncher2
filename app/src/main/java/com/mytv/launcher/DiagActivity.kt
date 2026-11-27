@@ -99,6 +99,8 @@ class DiagActivity : Activity() {
             sb.append("ошибка: ").append(e).append("\n")
         }
 
+        sb.append("\n== API: КЛАССЫ ==\n").append(CvteTv.describe(classLoader))
+
         sb.append("\n== ПАКЕТЫ ТВ ==\n")
         val re = Regex("(?i)(tv|source|input|hdmi|live|dtv|atv|dvb|tuner|channel|nebula|mstar|mtk|amlogic|allwinner|rockchip|hisi|realtek)")
         var n = 0
@@ -135,7 +137,7 @@ class DiagActivity : Activity() {
         setContentView(sv)
         sv.requestFocus()
 
-        CvteTv.connect(classLoader) { ok ->
+        CvteTv.connect(this) { ok ->
             if (!ok) {
                 tv.append("\n== CVTE API ==\nне подключилось: " + CvteTv.lastError + "\n")
             } else {

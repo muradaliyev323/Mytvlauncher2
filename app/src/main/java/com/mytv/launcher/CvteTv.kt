@@ -1,5 +1,6 @@
 package com.mytv.launcher
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import java.lang.reflect.InvocationHandler
@@ -23,11 +24,34 @@ object CvteTv {
     @Volatile private var loader: ClassLoader? = null
     @Volatile var lastError: String = ""
 
-    fun connect(cl: ClassLoader, cb: (Boolean) -> Unit) {
+    @Volatile private var initDone = false
+
+    private fun sig(m: java.lang.reflect.Method): String =
+        m.name + "(" + m.parameterTypes.joinToString(",") { it.simpleName } + ")" +
+            (if (java.lang.reflect.Modifier.isStatic(m.modifiers)) " static" else "")
+
+    // Описание классов SDK из системной библиотеки (для диагностики)
+    fun describe(cl: ClassLoader): String {
+        val sb = StringBuilder()
+        for (n in listOf("TvApiSDKManager", "TvApiApplication", "TvServiceConnection", "TvServiceConnectListener")) {
+            try {
+                val c = Class.forName(PKG + n, true, cl)
+                sb.append(n).append(" : ").append(c.superclass?.simpleName ?: "-").append("\n")
+                for (m in c.declaredMethods) sb.append("   ").append(sig(m)).append("\n")
+            } catch (e: Throwable) {
+                sb.append(n).append(" : ").append((e.cause ?: e).toString()).append("\n")
+            }
+        }
+        return sb.toString()
+    }
+
+    fun connect(ctx: Context, cb: (Boolean) -> Unit) {
         if (api != null) {
             cb(true)
             return
         }
+        val cl = ctx.classLoader
+        val app = ctx.applicationContext
         loader = cl
         var done = false
         val finish = { ok: Boolean ->
@@ -39,6 +63,22 @@ object CvteTv {
         try {
             val mgrCls = Class.forName(PKG + "TvApiSDKManager", true, cl)
             val inst = mgrCls.getMethod("getInstance").invoke(null)
+            if (!initDone) {
+                // SDK требует init() до первого обращения (у родного лаунчера это делает его Application)
+                val all = mgrCls.methods.toList() + mgrCls.declaredMethods.toList()
+                val im = all.firstOrNull {
+                    it.name.equals("init", true) && it.parameterTypes.size == 1 &&
+                        it.parameterTypes[0].isAssignableFrom(app.javaClass)
+                }
+                if (im != null) {
+                    im.isAccessible = true
+                    im.invoke(if (java.lang.reflect.Modifier.isStatic(im.modifiers)) null else inst, app)
+                    initDone = true
+                } else {
+                    lastError = "в TvApiSDKManager нет подходящего init: " +
+                        mgrCls.declaredMethods.joinToString(", ") { sig(it) }
+                }
+            }
             val connCls = Class.forName(PKG + "TvServiceConnection", true, cl)
             val handler = InvocationHandler { p, m, args ->
                 when (m.name) {

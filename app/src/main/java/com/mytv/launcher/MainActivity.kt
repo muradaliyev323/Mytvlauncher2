@@ -268,7 +268,7 @@ class MainActivity : Activity() {
 
     private fun openTv() {
         if (assigned("tv")) return
-        CvteTv.connect(classLoader) { ok ->
+        CvteTv.connect(this) { ok ->
             if (!ok) {
                 toast("Служба ТВ не отвечает (" + CvteTv.lastError + "). Удерживайте OK на плитке и откройте диагностику.")
             } else {
@@ -308,7 +308,7 @@ class MainActivity : Activity() {
 
     private fun openHdmi() {
         if (assigned("hdmi")) return
-        CvteTv.connect(classLoader) { ok ->
+        CvteTv.connect(this) { ok ->
             if (!ok) {
                 openHdmiTif()
             } else {
